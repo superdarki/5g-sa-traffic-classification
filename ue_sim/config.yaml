@@ -1,0 +1,134 @@
+tests:
+  # ------------------------
+  # URLLC-only tests
+  # ------------------------
+  - name: "urllc_ping_long"
+    duration: 600
+    ues:
+      - ue_id: 1
+        type: "periodic"
+        command: "ping -i 0.1 -s 32 -c 6000 192.168.1.186"
+        interval: 1
+
+  - name: "urllc_ncat_udp_long"
+    duration: 600
+    host_command: "ncat -u -l 44001 -v"
+    host_type: "single"
+    ues:
+      - ue_id: 1
+        type: "periodic"
+        command: "head -c 30 /dev/urandom | ncat -u 192.168.1.186 44001 -p 45001 -w 1 -v"
+        interval: 1
+
+  # ------------------------
+  # eMBB-only tests
+  # ------------------------
+  - name: "embb_file_downloads"
+    duration: 900
+    ues:
+      - ue_id: 2
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/1GB.bin"
+        interval: 60
+      - ue_id: 3
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/500MB.bin"
+        interval: 45
+      - ue_id: 4
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/100MB.bin"
+        interval: 30
+
+  # - name: "embb_streaming"
+  #   duration: 1200
+  #   ues:
+  #     - ue_id: 5
+  #       type: "periodic"
+  #       command: "ffmpeg -re -i http://192.168.1.186/files/720p.mp4 -f null -"
+  #       interval: 10
+  #     - ue_id: 6
+  #       type: "periodic"
+  #       command: "ffmpeg -re -i http://192.168.1.186/files/1080p.mp4 -f null -"
+  #       interval: 15
+  #     - ue_id: 7
+  #       type: "periodic"
+  #       command: "ffmpeg -re -i http://192.168.1.186/files/480p.mp4 -f null -"
+  #       interval: 20
+
+  - name: "embb_throughput_test"
+    duration: 900
+    host_command: "iperf3 -s -p 44001"
+    host_type: "single"
+    ues:
+      - ue_id: 8
+        type: "single"
+        command: "iperf3 -c 192.168.1.186 -p 44001 -u -b 200M -t 600"
+      - ue_id: 9
+        type: "single"
+        command: "iperf3 -c 192.168.1.186 -p 44001 -t 600"
+      - ue_id: 10
+        type: "single"
+        command: "iperf3 -c 192.168.1.186 -p 44001 -R -t 600"
+
+  # ------------------------
+  # Mixed traffic
+  # ------------------------
+  - name: "mixed_ping_and_downloads"
+    duration: 900
+    ues:
+      - ue_id: 1
+        type: "periodic"
+        command: "ping -i 0.05 -s 64 -c 18000 192.168.1.186"
+        interval: 1
+      - ue_id: 2
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/500MB.bin"
+        interval: 60
+      - ue_id: 3
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/200MB.bin"
+        interval: 60
+
+  # - name: "mixed_realtime_and_streaming"
+  #   duration: 1200
+  #   host_command: "ncat -u -l 44001 -v"
+  #   host_type: "single"
+  #   ues:
+  #     - ue_id: 1
+  #       type: "periodic"
+  #       command: "head -c 30 /dev/urandom | ncat -u 192.168.1.186 44001 -p 45001 -w 1 -v"
+  #       interval: 1
+  #     - ue_id: 4
+  #       type: "periodic"
+  #       command: "ffmpeg -re -i http://192.168.1.186/files/720p.mp4 -f null -"
+  #       interval: 10
+  #     - ue_id: 5
+  #       type: "periodic"
+  #       command: "ffmpeg -re -i http://192.168.1.186/files/1080p.mp4 -f null -"
+  #       interval: 20
+  #     - ue_id: 6
+  #       type: "periodic"
+  #       command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/200MB.bin"
+  #       interval: 120
+
+  - name: "mixed_iperf_and_latency"
+    duration: 900
+    host_command: "iperf3 -s -p 44001"
+    host_type: "single"
+    ues:
+      - ue_id: 1
+        type: "periodic"
+        command: "ping -i 0.1 -s 32 -c 9000 192.168.1.186"
+        interval: 1
+      - ue_id: 7
+        type: "single"
+        command: "iperf3 -c 192.168.1.186 -p 44001 -u -b 100M -t 600"
+      - ue_id: 8
+        type: "single"
+        command: "iperf3 -c 192.168.1.186 -p 44001 -t 600"
+      - ue_id: 9
+        type: "single"
+        command: "iperf3 -c 192.168.1.186 -p 44001 -R -t 600"
+      - ue_id: 10
+        type: "single"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/1GB.bin"

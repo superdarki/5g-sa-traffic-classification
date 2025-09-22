@@ -1,0 +1,40 @@
+tests:
+  # - name: "urllc_ping"
+  #   duration: 10
+  #   ues:
+  #     - ue_id: 1
+  #       type: "single"
+  #       command: "ping 192.168.1.186"
+
+  # - name: "ncat_udp"
+  #   duration: 10
+  #   # start a host ncat UDP listener automatically
+  #   host_command: "ncat -u -l 44001 -v"
+  #   host_type: "single"
+  #   ues:
+  #     - ue_id: 1
+  #       type: "periodic"
+  #       command: "head -c 30 /dev/urandom | ncat -u 192.168.1.186 44001 -p 45001 -w 1 -v"
+  #       interval: 1
+
+  - name: "curl"
+    duration: 10
+    ues:
+      - ue_id: 1
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/1MB.bin"
+        interval: 3
+      - ue_id: 2
+        type: "periodic"
+        command: "curl -v -s -o /dev/null -w '%{time_total}\n' http://192.168.1.186/files/500MB.bin"
+        interval: 60
+
+  # - name: "throughput"
+  #   duration: 70
+  #   # start an iperf3 server on the host automatically
+  #   host_command: "iperf3 -s -p 44001"
+  #   host_type: "single"
+  #   ues:
+  #     - ue_id: 1
+  #       type: "single"
+  #       command: "iperf3 -c 192.168.1.186 -p 44001 -u -b 20M -t 60"

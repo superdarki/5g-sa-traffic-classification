@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Any, Dict
 import yaml
 import time
 import signal
@@ -117,7 +118,7 @@ async def stream_amarisoft_logs(dest_dir: Path, stop_event: asyncio.Event, mode:
             async with websockets.connect(uri, extra_headers=headers) as ws:
                 # initial reset/cut if requested
                 if mode in ("reset", "cut"):
-                    reset_msg = {"message": "log_reset"}
+                    reset_msg: Dict[str, Any] = {"message": "log_reset"}
                     if mode == "cut":
                         reset_msg["cut"] = True
                     try:
@@ -225,6 +226,7 @@ async def stream_amarisoft_logs(dest_dir: Path, stop_event: asyncio.Event, mode:
                                             except Exception:
                                                 dt = datetime.now()
                                         else:
+                                            assert isinstance(parsed, dict)
                                             tt = parsed.get("time") or ent.get("time")
                                             if tt:
                                                 try:
@@ -396,13 +398,17 @@ async def run_tests(config_file: str):
             print(f"[INFO] Launching host command: {host_cmd}")
             if host_type == "single":
                 host_process = subprocess.Popen(
-                    host_cmd, shell=True, stdout=open(host_log, "w"), stderr=subprocess.STDOUT
+                    host_cmd,
+                    shell=True,
+                    stdout=open(host_log, "w"),
+                    stderr=subprocess.STDOUT,
                 )
             elif host_type == "periodic":
-                print(f"[WARN] 'periodic' host_type not implemented, skipping host command.")
+                print(
+                    f"[WARN] 'periodic' host_type not implemented, skipping host command."
+                )
             else:
                 print(f"[WARN] Unknown host_type '{host_type}', skipping host command.")
-
 
         await asyncio.sleep(1.0)  # give stream a moment to connect to websocket
 

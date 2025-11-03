@@ -222,7 +222,7 @@ def main():
     axes[1].set_title("Top 20 Feature Importances")
 
     if len(class_names) == 2:
-        y_scores = lgbm.predict_proba(X_test)[:, 1]
+        y_scores = lgbm.predict_proba(X_test)[:, 1]  # type: ignore
         fpr, tpr, _ = roc_curve(y_test, y_scores)
         roc_auc = auc(fpr, tpr)
         roc_ax = axes[2]

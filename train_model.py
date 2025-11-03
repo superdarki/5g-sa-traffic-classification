@@ -11,6 +11,8 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     ConfusionMatrixDisplay,
+    roc_curve,
+    auc,
 )
 import matplotlib.pyplot as plt
 import warnings
@@ -209,15 +211,34 @@ def main():
     y_pred = np.array(lgbm.predict(X_test))
     print(classification_report(y_test, y_pred, target_names=class_names))
 
-    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18, 7))
+    ncols = 3 if len(class_names) == 2 else 2
+    fig, axes = plt.subplots(nrows=1, ncols=ncols, figsize=(9 * ncols, 7))
+    axes = np.atleast_1d(axes).ravel()
     cm = confusion_matrix(y_test, y_pred)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot(ax=axes[0], cmap="Blues")
     axes[0].set_title("Confusion Matrix")
     lgb.plot_importance(lgbm, ax=axes[1], max_num_features=20, height=0.7)
     axes[1].set_title("Top 20 Feature Importances")
+
+    if len(class_names) == 2:
+        y_scores = lgbm.predict_proba(X_test)[:, 1]
+        fpr, tpr, _ = roc_curve(y_test, y_scores)
+        roc_auc = auc(fpr, tpr)
+        roc_ax = axes[2]
+        roc_ax.plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}")
+        roc_ax.plot([0, 1], [0, 1], linestyle="--", color="gray")
+        roc_ax.set_xlim([0.0, 1.0])
+        roc_ax.set_ylim([0.0, 1.05])
+        roc_ax.set_xlabel("False Positive Rate")
+        roc_ax.set_ylabel("True Positive Rate")
+        roc_ax.set_title("ROC Curve")
+        roc_ax.legend(loc="lower right")
+    else:
+        print("Skipping ROC curve plot because there are more than two classes.")
+
     plt.tight_layout()
-    plt.show()
+    plt.savefig("fig.png")
 
     # --- 7. Save the Model ---
     model_bundle = {

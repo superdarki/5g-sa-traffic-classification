@@ -2,11 +2,15 @@ import argparse
 import os
 import joblib
 import pandas as pd
+import numpy as np
+import lightgbm as lgb
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     ConfusionMatrixDisplay,
     accuracy_score,
+    roc_curve,
+    auc,
 )
 import matplotlib.pyplot as plt
 import warnings
@@ -140,6 +144,10 @@ def main():
     engineered_df = engineer_contextual_packet_features(
         features_to_engineer, window_size=window_size
     )
+    engineered_df.columns = [
+        "".join(c if c.isalnum() else "_" for c in str(col))
+        for col in engineered_df.columns
+    ]
 
     # --- 5. Prepare Data for Prediction ---
     X_eval = engineered_df.reindex(columns=model_columns, fill_value=0)
@@ -188,15 +196,44 @@ def main():
         with pd.option_context("display.max_rows", None, "display.max_columns", None):
             print(results_df)
 
-    # Display Confusion Matrix
-    print("\nSaving Confusion Matrix to 'confusion_matrix_evaluation.png'...")
-    fig, ax = plt.subplots(figsize=(8, 6))
+    # Diagnostics: Confusion Matrix, Feature Importance, ROC curves (if binary)
+    print("\n--- Visual Diagnostics ---")
+    class_names = le.classes_
+    ncols = 3 if len(class_names) == 2 else 2
+    fig, axes = plt.subplots(nrows=1, ncols=ncols, figsize=(9 * ncols, 7))
+    axes = np.atleast_1d(axes).ravel()
+
     cm = confusion_matrix(y_true_encoded, y_pred_encoded)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=le.classes_)
-    disp.plot(ax=ax, cmap="Blues")
-    ax.set_title("Confusion Matrix for Evaluation Data")
-    plt.savefig("confusion_matrix_evaluation.png")
-    print("Done.")
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+    disp.plot(ax=axes[0], cmap="Blues")
+    axes[0].set_title("Confusion Matrix")
+
+    lgb.plot_importance(model, ax=axes[1], max_num_features=20, height=0.7)
+    axes[1].set_title("Top 20 Feature Importances")
+
+    if len(class_names) == 2:
+        roc_ax = axes[2]
+        class_probabilities = model.predict_proba(X_eval)
+        for class_name in class_names:
+            encoded_label = le.transform([class_name])[0]
+            class_index = list(model.classes_).index(encoded_label)
+            y_scores = class_probabilities[:, class_index]
+            fpr, tpr, _ = roc_curve(y_true_encoded, y_scores, pos_label=encoded_label)
+            roc_auc = auc(fpr, tpr)
+            roc_ax.plot(fpr, tpr, label=f"{class_name} AUC = {roc_auc:.3f}")
+        roc_ax.plot([0, 1], [0, 1], linestyle="--", color="gray")
+        roc_ax.set_xlim([0.0, 1.0])
+        roc_ax.set_ylim([0.0, 1.05])
+        roc_ax.set_xlabel("False Positive Rate")
+        roc_ax.set_ylabel("True Positive Rate")
+        roc_ax.set_title("ROC Curve")
+        roc_ax.legend(loc="lower right")
+    else:
+        print("Skipping ROC curve plot because there are more than two classes.")
+
+    plt.tight_layout()
+    plt.savefig("evaluation_diagnostics.png", dpi=300)
+    print("Saved diagnostic plots to 'evaluation_diagnostics.png'.")
     plt.show()
 
 

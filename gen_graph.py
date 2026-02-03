@@ -1,7 +1,6 @@
 import argparse
 import os
 
-from matplotlib import pyplot as plt
 import pandas as pd
 from traffic_utils import parse_log_file
 
@@ -44,7 +43,7 @@ def main():
         return
 
     # --- 2. Data Loading and Combining ---
-    all_raw_packets = []
+    all_raw_packets: list[pd.DataFrame] = []
     print(f"--- Parsing {len(args.logfiles)} log file(s) ---")
     for logfile in args.logfiles:
         if not os.path.exists(logfile):
@@ -67,7 +66,7 @@ def main():
 
     # --- 3. Labeling and Pre-processing ---
     print("\n--- Assigning traffic labels based on UE ID lists ---")
-    ue_id_to_traffic_map = {}
+    ue_id_to_traffic_map: dict[int, str] = {}
     for ue_id in args.embb_ue:
         ue_id_to_traffic_map[ue_id] = "eMBB"
     for ue_id in args.urllc_ue:
@@ -76,7 +75,7 @@ def main():
     master_raw_df["traffic_type"] = master_raw_df["ue_id"].map(ue_id_to_traffic_map)
 
     initial_packet_count = len(master_raw_df)
-    master_raw_df.dropna(subset=["traffic_type"], inplace=True)
+    master_raw_df.dropna(subset=["traffic_type"], inplace=True)  # type: ignore
     kept_ues = list(ue_id_to_traffic_map.keys())
     print(f"Using {len(master_raw_df)} packets from specified UEs: {sorted(kept_ues)}.")
     print(
@@ -85,7 +84,7 @@ def main():
 
     initial_count = len(master_raw_df)
     if "harq" in master_raw_df.columns:
-        master_raw_df = master_raw_df.query("harq != -1").reset_index(drop=True)
+        master_raw_df = master_raw_df.query("harq != -1").reset_index(drop=True)  # type: ignore
     filtered_count = len(master_raw_df)
     print(
         f"\n--- Filtering out {initial_count - filtered_count} system information packets. ---"

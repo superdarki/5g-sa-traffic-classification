@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import warnings
+from typing import Any
 
 from traffic_utils import parse_log_file, engineer_contextual_packet_features
 
@@ -47,7 +48,7 @@ def main():
         sys.exit(1)
 
     print(f"Loading model from '{args.model}'...")
-    model_bundle = joblib.load(args.model)
+    model_bundle: dict[str, Any] = joblib.load(args.model)
     model = model_bundle["model"]
     encoder = model_bundle["encoder"]
     training_columns = model_bundle["columns"]
@@ -67,7 +68,7 @@ def main():
     print(f"\nParsed {len(raw_df)} total packets from log file.")
 
     if "harq" in raw_df.columns:
-        classifiable_df = raw_df.query("harq != -1").reset_index(drop=True)
+        classifiable_df = raw_df.query("harq != -1").reset_index(drop=True)  # type: ignore
         num_filtered = len(raw_df) - len(classifiable_df)
         print(f"Filtering out {num_filtered} system information (harq=-1) packets.")
     else:

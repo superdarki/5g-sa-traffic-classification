@@ -2,12 +2,13 @@
 
 import argparse
 import os
+from matplotlib.pylab import Any
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split  # type: ignore
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report  # type: ignore
 import warnings
 import joblib
 
@@ -73,7 +74,7 @@ def main():
         return
 
     # --- 2. Data Loading and Combining ---
-    all_raw_packets = []
+    all_raw_packets: list[pd.DataFrame] = []
     print(f"--- Parsing {len(args.logfiles)} log file(s) ---")
     for logfile in args.logfiles:
         if not os.path.exists(logfile):
@@ -96,7 +97,7 @@ def main():
 
     # --- 3. Labeling and Pre-processing ---
     print("\n--- Assigning traffic labels based on UE ID lists ---")
-    ue_id_to_traffic_map = {}
+    ue_id_to_traffic_map: dict[int, str] = {}
     for ue_id in args.embb_ue:
         ue_id_to_traffic_map[ue_id] = "eMBB"
     for ue_id in args.urllc_ue:
@@ -105,7 +106,7 @@ def main():
     master_raw_df["traffic_type"] = master_raw_df["ue_id"].map(ue_id_to_traffic_map)
 
     initial_packet_count = len(master_raw_df)
-    master_raw_df.dropna(subset=["traffic_type"], inplace=True)
+    master_raw_df.dropna(subset=["traffic_type"], inplace=True)  # type: ignore
     kept_ues = list(ue_id_to_traffic_map.keys())
     print(f"Using {len(master_raw_df)} packets from specified UEs: {sorted(kept_ues)}.")
     print(
@@ -114,7 +115,7 @@ def main():
 
     initial_count = len(master_raw_df)
     if "harq" in master_raw_df.columns:
-        master_raw_df = master_raw_df.query("harq != -1").reset_index(drop=True)
+        master_raw_df = master_raw_df.query("harq != -1").reset_index(drop=True)  # type: ignore
     filtered_count = len(master_raw_df)
     print(
         f"\n--- Filtering out {initial_count - filtered_count} system information packets. ---"
@@ -178,37 +179,37 @@ def main():
         f"\nClass mapping: {list(zip(class_names, np.array(le.transform(class_names)).tolist()))}"
     )
 
-    X = master_features_df.drop(columns=["traffic_type", "traffic_type_encoded"])
+    x = master_features_df.drop(columns=["traffic_type", "traffic_type_encoded"])
     y = master_features_df["traffic_type_encoded"]
 
     # Replace non-alphanumeric characters so LightGBM receives valid column names.
-    X.columns = ["".join(c if c.isalnum() else "_" for c in str(x)) for x in X.columns]
+    x.columns = ["".join(c if c.isalnum() else "_" for c in str(k)) for k in x.columns]
 
     # Align to the feature ordering expected by the previously trained model, filling missing features with 0.
     if model_columns:
-        X = X.reindex(columns=model_columns, fill_value=0)
+        x = x.reindex(columns=model_columns, fill_value=0)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.3, random_state=42, stratify=y
+    X_train, X_test, y_train, y_test = train_test_split(  # type: ignore
+        x, y, test_size=0.3, random_state=42, stratify=y
     )
-    print(f"\nTraining on {len(X_train)} packets, testing on {len(X_test)} packets.")
+    print(f"\nTraining on {len(X_train)} packets, testing on {len(X_test)} packets.")  # type: ignore
 
     print("\n--- Training LightGBM Model ---")
     lgbm = lgb.LGBMClassifier(objective="binary", random_state=42, learning_rate=0.01)
 
     # Pass the previous model (if available) so LightGBM can warm start training.
-    lgbm.fit(X_train, y_train, init_model=initial_model)
+    lgbm.fit(X_train, y_train, init_model=initial_model)  # type: ignore
 
     # --- 6. Evaluation ---
     print("\n--- Model Evaluation ---")
-    y_pred = np.array(lgbm.predict(X_test))
-    print(classification_report(y_test, y_pred, target_names=class_names))
+    y_pred = np.array(lgbm.predict(X_test))  # type: ignore
+    print(classification_report(y_test, y_pred, target_names=class_names))  # type: ignore
 
     # --- 7. Save the Model ---
-    model_bundle = {
+    model_bundle: dict[str, Any] = {
         "model": lgbm,
         "encoder": le,
-        "columns": X.columns.tolist(),
+        "columns": x.columns.tolist(),
         "window_size": args.window_size,
     }
     joblib.dump(model_bundle, args.output)

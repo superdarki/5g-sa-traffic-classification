@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 from sklearn.metrics import (
-    classification_report,
+    classification_report,  # type: ignore
     confusion_matrix,
     ConfusionMatrixDisplay,
     accuracy_score,
@@ -84,7 +84,7 @@ def main():
         return
 
     # --- 2. Parse Log Files, Combine, and Assign True Labels ---
-    all_raw_packets = []
+    all_raw_packets: list[pd.DataFrame] = []
     print(f"\n--- Parsing {len(args.logfiles)} evaluation log file(s) ---")
     for logfile in args.logfiles:
         if not os.path.exists(logfile):
@@ -100,12 +100,12 @@ def main():
         return
 
     print("\n--- Combining and sorting all logs into a single timeline ---")
-    eval_df_raw = pd.concat(all_raw_packets, ignore_index=True)
+    eval_df_raw: pd.DataFrame = pd.concat(all_raw_packets, ignore_index=True)
     eval_df_raw = eval_df_raw.sort_values("timestamp").reset_index(drop=True)
     print(f"Total raw packets combined for evaluation: {len(eval_df_raw)}")
 
     print("\n--- Assigning traffic labels based on UE ID lists ---")
-    ue_id_to_traffic_map = {}
+    ue_id_to_traffic_map: dict[int, str] = {}
     for ue_id in args.embb_ue:
         ue_id_to_traffic_map[ue_id] = "eMBB"
     for ue_id in args.urllc_ue:
@@ -114,7 +114,7 @@ def main():
     eval_df_raw["traffic_type"] = eval_df_raw["ue_id"].map(ue_id_to_traffic_map)
 
     initial_packet_count = len(eval_df_raw)
-    eval_df_raw.dropna(subset=["traffic_type"], inplace=True)
+    eval_df_raw.dropna(subset=["traffic_type"], inplace=True)  # type: ignore
     kept_ues = list(ue_id_to_traffic_map.keys())
     print(f"Kept {len(eval_df_raw)} packets from specified UEs: {sorted(kept_ues)}.")
     print(
@@ -124,7 +124,7 @@ def main():
     # --- 3. Pre-process the Data ---
     initial_count = len(eval_df_raw)
     if "harq" in eval_df_raw.columns:
-        eval_df_filtered = eval_df_raw.query("harq != -1").reset_index(drop=True)
+        eval_df_filtered = eval_df_raw.query("harq != -1").reset_index(drop=True)  # type: ignore
     else:
         eval_df_filtered = eval_df_raw.reset_index(drop=True)
 
@@ -166,7 +166,7 @@ def main():
     print(f"Overall Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
     print("\nClassification Report:")
     print(
-        classification_report(y_true_encoded, y_pred_encoded, target_names=le.classes_)
+        classification_report(y_true_encoded, y_pred_encoded, target_names=le.classes_)  # type: ignore
     )
 
     # Create a detailed results DataFrame
@@ -188,7 +188,7 @@ def main():
     if misclassified_df.empty:
         print("No packets were misclassified. Excellent!")
     elif args.verbose:
-        print(misclassified_df.to_string())
+        print(misclassified_df.to_string())  # type: ignore
 
     # Print all packets if --verbose is used
     if args.verbose:
@@ -200,15 +200,15 @@ def main():
     print("\n--- Visual Diagnostics ---")
     class_names = le.classes_
     ncols = 3 if len(class_names) == 2 else 2
-    fig, axes = plt.subplots(nrows=1, ncols=ncols, figsize=(9 * ncols, 7))
+    fig, axes = plt.subplots(nrows=1, ncols=ncols, figsize=(9 * ncols, 7))  # type: ignore
     axes = np.atleast_1d(axes).ravel()
 
     cm = confusion_matrix(y_true_encoded, y_pred_encoded)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
-    disp.plot(ax=axes[0], cmap="Blues")
+    disp.plot(ax=axes[0], cmap="Blues")  # type: ignore
     axes[0].set_title("Confusion Matrix")
 
-    lgb.plot_importance(model, ax=axes[1], max_num_features=20, height=0.7)
+    lgb.plot_importance(model, ax=axes[1], max_num_features=20, height=0.7)  # type: ignore
     axes[1].set_title("Top 20 Feature Importances")
 
     if len(class_names) == 2:
@@ -232,9 +232,9 @@ def main():
         print("Skipping ROC curve plot because there are more than two classes.")
 
     plt.tight_layout()
-    plt.savefig("evaluation_diagnostics.png", dpi=300)
+    plt.savefig("evaluation_diagnostics.png", dpi=300)  # type: ignore
     print("Saved diagnostic plots to 'evaluation_diagnostics.png'.")
-    plt.show()
+    plt.show()  # type: ignore
 
 
 if __name__ == "__main__":

@@ -1,10 +1,11 @@
 import re, os
+from typing import Optional
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
 
-def parse_phy_mac_log_line(line):
+def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
     """
     Parses a single PHY or MAC log line and extracts relevant features.
     This version is compatible with both gNB and UE log formats by handling
@@ -127,11 +128,11 @@ def parse_phy_mac_log_line(line):
     return None
 
 
-def parse_log_file(file_path):
+def parse_log_file(file_path: str):
     """
     Reads an entire log file, extracts UE ID, and returns a DataFrame of parsed data.
     """
-    parsed_data = []
+    parsed_data: list[dict[str, int | float | str]] = []
     # This regex captures timestamp, layer, direction, and UE ID from the log line prefix
     line_prefix_re = re.compile(
         r"(\d{2}:\d{2}:\d{2}\.\d{3})\s+\[(\w+)\]\s+(\S+)\s+(\d{4})"
@@ -168,7 +169,7 @@ def parse_log_file(file_path):
     return df.reset_index(drop=True)
 
 
-def engineer_contextual_packet_features(df, window_size=5):
+def engineer_contextual_packet_features(df: pd.DataFrame, window_size: int = 5):
     """
     Engineers features for each packet including context from surrounding packets.
     """
@@ -185,8 +186,8 @@ def engineer_contextual_packet_features(df, window_size=5):
     )
 
     # 2. Calculate Inter-Packet Time
-    df["inter_packet_time_ns"] = df["timestamp"].diff().dt.total_seconds() * 1e9
-    df["time_to_next_packet_ns"] = df["timestamp"].diff(-1).dt.total_seconds() * -1e9
+    df["inter_packet_time_ns"] = df["timestamp"].diff().dt.total_seconds() * 1e9  # type: ignore
+    df["time_to_next_packet_ns"] = df["timestamp"].diff(-1).dt.total_seconds() * -1e9  # type: ignore
 
     # 3. Create Rolling Window Features for ALL Numeric Columns
     numeric_cols = df.select_dtypes(include=np.number).columns.tolist()

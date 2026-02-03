@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import yaml
 import time
 import signal
@@ -127,16 +127,16 @@ async def stream_amarisoft_logs(dest_dir: Path, stop_event: asyncio.Event, mode:
                         print(f"[WARN] Failed to send reset message: {e}")
 
                 # small header writer helper
-                def write_header(payload=None):
+                def write_header(payload: Optional[dict[str, Any]] = None):
                     nonlocal written_header
                     if written_header:
                         return
                     with open(out_file, "a", encoding="utf-8") as f:
-                        ts_now = datetime.now().strftime("%a %b %d %Y %H:%M:%S %Z")
+                        # ts_now = datetime.now().strftime("%a %b %d %Y %H:%M:%S %Z")
                         f.write(
                             f"# Logs streamed on {datetime.now().isoformat()} from {AMARI_HOST}:{AMARI_PORT}\n"
                         )
-                        if payload and isinstance(payload, dict):
+                        if payload is not None:
                             # include some metadata if available
                             v = payload.get("version")
                             src = payload.get("type") or payload.get("src")
@@ -151,7 +151,7 @@ async def stream_amarisoft_logs(dest_dir: Path, stop_event: asyncio.Event, mode:
                     now = time.time()
                     if now >= next_get:
                         next_get = now + get_interval
-                        req = {
+                        req: Dict[str, Any] = {
                             "message": "log_get",
                             "timeout": 1,
                             "min": REQ_MIN,

@@ -3,17 +3,18 @@
 Classify enhanced Mobile Broadband (eMBB) and Ultra-Reliable Low-Latency Communication (URLLC) traffic from standalone (SA) 5G traces using LightGBM and contextual PHY/MAC features.
 
 ## Highlights
-- `traffic_utils.py` - parses Amarisoft UE Simulator PHY/MAC logs and engineers contextual features.
-- `train_model.py` - trains or warm starts a LightGBM classifier from labelled log captures.
-- `evaluate_model.py` - scores a saved model on labelled datasets and writes evaluation plots.
-- `classify_log.py` - performs per-packet predictions on a fresh capture.
+- `transform_log.py` - normalizes raw logs into a single CSV schema with `traffic_type` labels.
+- `traffic_utils.py` - normalization helpers and contextual feature engineering.
+- `train_model.py` - trains or warm starts a LightGBM classifier from normalized CSV logs.
+- `evaluate_model.py` - scores a saved model on normalized datasets and writes evaluation plots.
+- `classify_log.py` - performs per-packet predictions on a normalized capture.
 - `list_feature_importances.py` - optional helper to inspect the most important features.
 - `data/` - sample logs you can use for experiments.
 
 ## Requirements
 - Python 3.11 or newer.
 - A virtual environment is recommended so project dependencies do not leak into the system Python.
-- Logs produced by the srsRAN (or compatible) gNB debug output where each line starts with a timestamp, layer tag, direction, and UE ID.
+- Raw logs from Amarisoft gNB or RS ROME exports (normalized before training/evaluation).
 
 ## Installation (Windows PowerShell)
 ```powershell
@@ -64,7 +65,13 @@ python transform_log.py data/amarisoft_uesim/20250829-133752_urllc_ping_long.log
 python transform_log.py data/rs_romes/40MHz.csv --format rome --urllc-time 11:52:59.000-11:53:10.000 --embb-time 11:53:20.000-11:54:00.000 --output-dir data/normalized
 ```
 
-The normalized format is a CSV with the columns in `traffic_utils.STANDARD_COLUMNS`, time ranges are inclusive, and system-information packets (`harq == -1`) are removed during normalization.
+Notes:
+- `--format` is required. Aliases: `rome` → `rs_rome`, `norm` → `normalized`.
+- RS ROME logs are labeled using inclusive time ranges on the `Time` column.
+- Amarisoft logs are labeled using UE IDs.
+- Normalized inputs should already contain `traffic_type` (no labeling arguments allowed).
+
+The normalized format is a CSV with the columns in `traffic_utils.STANDARD_COLUMNS`. It includes `traffic_type` and does not include UE IDs. System-information packets (`harq == -1`) are removed during normalization.
 
 ## Understanding the Features
 `traffic_utils.engineer_contextual_packet_features` builds:
@@ -82,7 +89,7 @@ python list_feature_importances.py traffic_classifier.joblib --top-k 25
 The `data/` directory ships with assorted captures that mix ping, throughput, and UDP traffic. Use them to bootstrap training or to validate the pipeline.
 
 ## Troubleshooting
-- Make sure the UE IDs provided to `--embb-ue` and `--urllc-ue` do not overlap; scripts exit if they do.
+- `transform_log.py` will reject mismatched labeling args (UE IDs for RS ROME, or time ranges for Amarisoft).
 - If a capture lacks certain packet types, missing features are zero-filled when aligning with the model columns.
 - Retraining reuses the original `LabelEncoder` so class indices remain stable across sessions.
 - In headless setups, comment out or remove the plotting calls in `train_model.py` and `evaluate_model.py`.

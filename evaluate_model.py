@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import warnings
 
 # traffic_utils.py is unchanged and works as is
-from traffic_utils import engineer_contextual_packet_features, parse_log_file
+from traffic_utils import engineer_contextual_packet_features
 
 warnings.filterwarnings("ignore")
 
@@ -36,21 +36,7 @@ def main():
         "logfiles",
         type=str,
         nargs="+",  # Accept one or more file paths
-        help="Path to one or more mixed-traffic log files for evaluation.",
-    )
-    parser.add_argument(
-        "--embb-ue",
-        type=int,
-        nargs="+",
-        required=True,
-        help="One or more UE IDs for eMBB traffic (e.g., --embb-ue 9 10).",
-    )
-    parser.add_argument(
-        "--urllc-ue",
-        type=int,
-        nargs="+",
-        required=True,
-        help="One or more UE IDs for URLLC traffic (e.g., --urllc-ue 1 2).",
+        help="Path to one or more normalized CSV log files for evaluation.",
     )
     parser.add_argument(
         "--verbose",
@@ -58,15 +44,6 @@ def main():
         help="Print the classification result for every single packet.",
     )
     args = parser.parse_args()
-
-    # --- VALIDATION ---
-    embb_ues = set(args.embb_ue)
-    urllc_ues = set(args.urllc_ue)
-
-    if embb_ues.intersection(urllc_ues):
-        print("Error: The same UE ID cannot be used for both eMBB and URLLC traffic.")
-        print(f"Overlap found: {embb_ues.intersection(urllc_ues)}")
-        return
 
     # --- 1. Load the Model and Artifacts ---
     try:
@@ -83,7 +60,7 @@ def main():
         print(f"Error: Model bundle is missing a required key: {e}")
         return
 
-    # --- 2. Parse Log Files, Combine, and Assign True Labels ---
+    # --- 2. Parse Normalized Log Files ---
     all_raw_packets: list[pd.DataFrame] = []
     print(f"\n--- Parsing {len(args.logfiles)} evaluation log file(s) ---")
     for logfile in args.logfiles:
@@ -91,7 +68,9 @@ def main():
             print(f"Warning: Log file not found at '{logfile}'. Skipping.")
             continue
         print(f"Reading: {logfile}")
-        df = parse_log_file(logfile)
+        df = pd.read_csv(logfile)  # type: ignore
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         if not df.empty:
             all_raw_packets.append(df)
 
@@ -104,33 +83,27 @@ def main():
     eval_df_raw = eval_df_raw.sort_values("timestamp").reset_index(drop=True)
     print(f"Total raw packets combined for evaluation: {len(eval_df_raw)}")
 
-    print("\n--- Assigning traffic labels based on UE ID lists ---")
-    ue_id_to_traffic_map: dict[int, str] = {}
-    for ue_id in args.embb_ue:
-        ue_id_to_traffic_map[ue_id] = "eMBB"
-    for ue_id in args.urllc_ue:
-        ue_id_to_traffic_map[ue_id] = "URLLC"
+    # --- 3. Pre-process the Data ---
+    required_columns = {"timestamp", "type", "direction", "traffic_type"}
+    missing_columns = required_columns.difference(eval_df_raw.columns)
+    if missing_columns:
+        print(f"Error: Normalized logs are missing columns: {sorted(missing_columns)}")
+        return
 
-    eval_df_raw["traffic_type"] = eval_df_raw["ue_id"].map(ue_id_to_traffic_map)
+    if "traffic_type" not in eval_df_raw.columns:
+        print("Error: Normalized logs must include a 'traffic_type' column.")
+        return
 
     initial_packet_count = len(eval_df_raw)
     eval_df_raw.dropna(subset=["traffic_type"], inplace=True)  # type: ignore
-    kept_ues = list(ue_id_to_traffic_map.keys())
-    print(f"Kept {len(eval_df_raw)} packets from specified UEs: {sorted(kept_ues)}.")
+    print(f"Kept {len(eval_df_raw)} labeled packets for evaluation.")
+    print(f"Filtered out {initial_packet_count - len(eval_df_raw)} unlabeled packets.")
+
     print(
-        f"Filtered out {initial_packet_count - len(eval_df_raw)} packets from other UEs."
+        "Normalization complete (system information packets with harq=-1 already filtered)."
     )
-
-    # --- 3. Pre-process the Data ---
-    initial_count = len(eval_df_raw)
-    if "harq" in eval_df_raw.columns:
-        eval_df_filtered = eval_df_raw.query("harq != -1").reset_index(drop=True)  # type: ignore
-    else:
-        eval_df_filtered = eval_df_raw.reset_index(drop=True)
-
-    filtered_count = len(eval_df_filtered)
-    print(f"Filtered out {initial_count - filtered_count} system info packets.")
-    print(f"Remaining packets for evaluation: {filtered_count}")
+    eval_df_filtered = eval_df_raw.reset_index(drop=True)
+    print(f"Remaining packets for evaluation: {len(eval_df_filtered)}")
 
     if eval_df_filtered.empty:
         print("No data remains after filtering. Cannot evaluate. Exiting.")
@@ -173,7 +146,7 @@ def main():
     y_pred_labels = le.inverse_transform(y_pred_encoded)
 
     results_df = eval_df_filtered[
-        ["timestamp", "ue_id", "type", "direction", "tb_len", "prbs", "snr"]
+        ["timestamp", "type", "direction", "tb_len", "prbs", "snr"]
     ].copy()
     results_df["true_type"] = true_labels.values
     results_df["predicted_type"] = y_pred_labels

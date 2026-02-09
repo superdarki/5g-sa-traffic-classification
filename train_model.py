@@ -1,8 +1,6 @@
-# File: train_model.py
-
 import argparse
 import os
-from matplotlib.pylab import Any
+from typing import Any
 import pandas as pd
 import numpy as np
 import lightgbm as lgb
@@ -13,7 +11,7 @@ import warnings
 import joblib
 
 # Import parsing and feature-engineering helpers from the local module.
-from traffic_utils import parse_log_file, engineer_contextual_packet_features
+from traffic_utils import engineer_contextual_packet_features
 
 warnings.filterwarnings("ignore")
 
@@ -29,21 +27,7 @@ def main():
         "logfiles",
         type=str,
         nargs="+",
-        help="Path to one or more mixed-traffic log files for training (e.g., log1.txt log2.txt).",
-    )
-    parser.add_argument(
-        "--embb-ue",
-        type=int,
-        nargs="+",
-        required=True,
-        help="One or more UE IDs to be labeled as eMBB traffic (e.g., --embb-ue 9 10).",
-    )
-    parser.add_argument(
-        "--urllc-ue",
-        type=int,
-        nargs="+",
-        required=True,
-        help="One or more UE IDs to be labeled as URLLC traffic (e.g., --urllc-ue 1 2).",
+        help="Path to one or more normalized CSV log files for training.",
     )
     parser.add_argument(
         "--output",
@@ -65,15 +49,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # --- 1. Argument Validation ---
-    embb_ues = set(args.embb_ue)
-    urllc_ues = set(args.urllc_ue)
-    if embb_ues.intersection(urllc_ues):
-        print(f"Error: The same UE ID cannot be used for both eMBB and URLLC traffic.")
-        print(f"Overlap found: {embb_ues.intersection(urllc_ues)}")
-        return
-
-    # --- 2. Data Loading and Combining ---
+    # --- 1. Data Loading and Combining ---
     all_raw_packets: list[pd.DataFrame] = []
     print(f"--- Parsing {len(args.logfiles)} log file(s) ---")
     for logfile in args.logfiles:
@@ -81,7 +57,9 @@ def main():
             print(f"Warning: Log file not found at '{logfile}'. Skipping.")
             continue
         print(f"Reading: {logfile}")
-        df = parse_log_file(logfile)
+        df = pd.read_csv(logfile)  # type: ignore
+        if "timestamp" in df.columns:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         if not df.empty:
             all_raw_packets.append(df)
 
@@ -95,32 +73,28 @@ def main():
     master_raw_df = master_raw_df.sort_values("timestamp").reset_index(drop=True)
     print(f"Total raw packets combined from all files: {len(master_raw_df)}")
 
-    # --- 3. Labeling and Pre-processing ---
-    print("\n--- Assigning traffic labels based on UE ID lists ---")
-    ue_id_to_traffic_map: dict[int, str] = {}
-    for ue_id in args.embb_ue:
-        ue_id_to_traffic_map[ue_id] = "eMBB"
-    for ue_id in args.urllc_ue:
-        ue_id_to_traffic_map[ue_id] = "URLLC"
+    # --- 2. Validate Normalized Data ---
+    required_columns = {"timestamp", "type", "direction", "traffic_type"}
+    missing_columns = required_columns.difference(master_raw_df.columns)
+    if missing_columns:
+        print(f"Error: Normalized logs are missing columns: {sorted(missing_columns)}")
+        return
 
-    master_raw_df["traffic_type"] = master_raw_df["ue_id"].map(ue_id_to_traffic_map)
+    if "traffic_type" not in master_raw_df.columns:
+        print("Error: Normalized logs must include a 'traffic_type' column.")
+        return
 
     initial_packet_count = len(master_raw_df)
     master_raw_df.dropna(subset=["traffic_type"], inplace=True)  # type: ignore
-    kept_ues = list(ue_id_to_traffic_map.keys())
-    print(f"Using {len(master_raw_df)} packets from specified UEs: {sorted(kept_ues)}.")
+    print(f"Using {len(master_raw_df)} labeled packets for training.")
     print(
-        f"Filtered out {initial_packet_count - len(master_raw_df)} packets from other UEs."
+        f"Filtered out {initial_packet_count - len(master_raw_df)} unlabeled packets."
     )
 
-    initial_count = len(master_raw_df)
-    if "harq" in master_raw_df.columns:
-        master_raw_df = master_raw_df.query("harq != -1").reset_index(drop=True)  # type: ignore
-    filtered_count = len(master_raw_df)
     print(
-        f"\n--- Filtering out {initial_count - filtered_count} system information packets. ---"
+        "\n--- Normalization complete (system information packets with harq=-1 already filtered). ---"
     )
-    print(f"Remaining packets for training: {filtered_count}")
+    print(f"Remaining packets for training: {len(master_raw_df)}")
 
     if master_raw_df.empty:
         print("No training data remains after filtering. Exiting.")

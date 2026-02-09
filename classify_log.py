@@ -8,7 +8,7 @@ import joblib
 import warnings
 from typing import Any
 
-from traffic_utils import parse_log_file, engineer_contextual_packet_features
+from traffic_utils import engineer_contextual_packet_features
 
 warnings.filterwarnings("ignore")
 
@@ -31,7 +31,9 @@ def main():
         description="Classify packets in a gNB log file as eMBB or URLLC."
     )
     parser.add_argument(
-        "log_file", type=file_path, help="Path to the gNB log file to classify."
+        "log_file",
+        type=file_path,
+        help="Path to the normalized CSV log file to classify.",
     )
     parser.add_argument(
         "--model",
@@ -61,27 +63,28 @@ def main():
         print(f"Error: Log file not found at '{args.log_file}'")
         sys.exit(1)
 
-    raw_df = parse_log_file(args.log_file)
-    if raw_df.empty:
+    normalized_df = pd.read_csv(args.log_file)  # type: ignore
+    if "timestamp" in normalized_df.columns:
+        normalized_df["timestamp"] = pd.to_datetime(
+            normalized_df["timestamp"], errors="coerce"
+        )
+    if normalized_df.empty:
         print("No parsable data found in the log file.")
         sys.exit(0)
-    print(f"\nParsed {len(raw_df)} total packets from log file.")
+    print(f"\nParsed {len(normalized_df)} total packets from log file.")
 
-    if "harq" in raw_df.columns:
-        classifiable_df = raw_df.query("harq != -1").reset_index(drop=True)  # type: ignore
-        num_filtered = len(raw_df) - len(classifiable_df)
-        print(f"Filtering out {num_filtered} system information (harq=-1) packets.")
-    else:
-        classifiable_df = raw_df  # No harq column, so nothing to filter
-
-    if classifiable_df.empty:
-        print("No classifiable data remains after filtering.")
-        sys.exit(0)
+    required_columns = {"timestamp", "type", "direction"}
+    missing_columns = required_columns.difference(normalized_df.columns)
+    if missing_columns:
+        print(f"Error: Normalized logs are missing columns: {sorted(missing_columns)}")
+        sys.exit(1)
 
     # Engineer features only on the relevant (non-system) packets
-    original_timestamps = classifiable_df["timestamp"]
+    if "traffic_type" in normalized_df.columns:
+        normalized_df = normalized_df.drop(columns=["traffic_type"])
+    original_timestamps = normalized_df["timestamp"]
     features_df = engineer_contextual_packet_features(
-        classifiable_df, window_size=window_size
+        normalized_df, window_size=window_size
     )
 
     # --- 3. Align Columns with Training Data ---

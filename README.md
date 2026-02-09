@@ -25,15 +25,14 @@ pip install -r requirements.txt
 If PowerShell blocks script execution, run `Set-ExecutionPolicy -Scope Process RemoteSigned` before activating the environment.
 
 ## Training a Model
-Provide one or more labelled logs plus the UE IDs that correspond to eMBB and URLLC traffic:
+Train from normalized logs (CSV) that already include `traffic_type` labels:
 
 ```powershell
-python train_model.py data/20250829-135805_embb_file_downloads.log data/20250829-134800_urllc_ncat_udp_long.log --embb-ue 9 --urllc-ue 1 --output traffic_classifier.joblib
+python train_model.py data/normalized/embb_and_urllc.normalized.csv --output traffic_classifier.joblib
 ```
 
 The script:
-- Validates that UE ID lists do not overlap.
-- Parses and merges the logs into a single timeline, removing system-information packets (`harq == -1`).
+- Loads and merges normalized logs into a single timeline (system-information packets with `harq == -1` are already filtered during normalization).
 - Engineers rolling-window statistics and categorical encodings via `traffic_utils.engineer_contextual_packet_features`.
 - Trains a LightGBM classifier (or continues training if `--retrain-from` is supplied).
 - Displays a confusion matrix and top feature importances.
@@ -45,17 +44,27 @@ Key optional arguments:
 
 ## Evaluating a Saved Model
 ```powershell
-python evaluate_model.py traffic_classifier.joblib data/20250829-142818_mixed_ping_and_downloads.log data/20250829-144327_mixed_iperf_and_latency.log --embb-ue 9 --urllc-ue 1
+python evaluate_model.py traffic_classifier.joblib data/normalized/mixed_1.normalized.csv data/normalized/mixed_2.normalized.csv
 ```
 
 Outputs include overall accuracy, a full `classification_report`, misclassification counts, and `confusion_matrix_evaluation.png`. Use `--verbose` to print packet-level predictions.
 
 ## Classifying a New Capture
 ```powershell
-python classify_log.py data/20250829-142818_mixed_ping_and_downloads.log --model traffic_classifier.joblib
+python classify_log.py data/normalized/new_capture.normalized.csv --model traffic_classifier.joblib
 ```
 
-The script filters out system-information packets, engineers the same contextual features, aligns them to the training schema, and prints each packet's predicted slice with confidence.
+The script engineers the same contextual features, aligns them to the training schema, and prints each packet's predicted slice with confidence.
+
+## Normalizing Log Formats
+If you have logs from multiple sources, normalize them once and use the normalized CSVs everywhere:
+
+```powershell
+python transform_log.py data/amarisoft_uesim/20250829-133752_urllc_ping_long.log --format amarisoft --embb-ue 9 --urllc-ue 1
+python transform_log.py data/rs_romes/40MHz.csv --format rome --urllc-time 11:52:59.000-11:53:10.000 --embb-time 11:53:20.000-11:54:00.000 --output-dir data/normalized
+```
+
+The normalized format is a CSV with the columns in `traffic_utils.STANDARD_COLUMNS`, time ranges are inclusive, and system-information packets (`harq == -1`) are removed during normalization.
 
 ## Understanding the Features
 `traffic_utils.engineer_contextual_packet_features` builds:

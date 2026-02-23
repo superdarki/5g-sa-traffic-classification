@@ -138,13 +138,13 @@ def main():
 
     if initial_model:
         # Reuse the existing encoder so label indices stay consistent during retraining.
-        master_features_df["traffic_type_encoded"] = le.transform(
+        master_features_df["traffic_type_encoded"] = le.transform(  # type: ignore
             master_features_df["traffic_type"]
         )
     else:
         # Fit a fresh encoder when starting from scratch to derive the label mapping.
         print("--- Training a new model from scratch ---")
-        master_features_df["traffic_type_encoded"] = le.fit_transform(
+        master_features_df["traffic_type_encoded"] = le.fit_transform(  # type: ignore
             master_features_df["traffic_type"]
         )
 

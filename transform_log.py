@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import pandas as pd
 
 from traffic_utils import normalize_log_file, STANDARD_COLUMNS
 
@@ -37,7 +38,15 @@ def main() -> None:
         "--format",
         type=str,
         required=True,
-        choices=["amarisoft", "rs_romes", "romes", "normalized", "norm"],
+        choices=[
+            "amarisoft",
+            "rs_rome",
+            "rs_romes",
+            "rome",
+            "romes",
+            "normalized",
+            "norm",
+        ],
         help="Input log format (required).",
     )
     parser.add_argument(
@@ -68,6 +77,13 @@ def main() -> None:
         default=None,
         help="One or more inclusive time ranges (HH:MM:SS.mmm-HH:MM:SS.mmm) for URLLC.",
     )
+    parser.add_argument(
+        "--force-traffic",
+        type=str,
+        choices=["embb", "urllc"],
+        default=None,
+        help="Force all parsed packets in the file to one class (RS ROME only).",
+    )
 
     args = parser.parse_args()
 
@@ -81,21 +97,48 @@ def main() -> None:
 
     format_map = {
         "amarisoft": "amarisoft",
-        "rs_romes": "rs_romes",
-        "romes": "rs_romes",
+        "rs_rome": "rs_rome",
+        "rs_romes": "rs_rome",
+        "rome": "rs_rome",
+        "romes": "rs_rome",
         "normalized": "normalized",
         "norm": "normalized",
     }
     log_format = format_map[args.format]
 
-    if log_format == "rs_romes" and (args.embb_ue or args.urllc_ue):
+    if log_format == "rs_rome" and (args.embb_ue or args.urllc_ue):
         print("Error: RS ROMES logs must be labeled with time ranges, not UE IDs.")
+        sys.exit(1)
+    if (
+        log_format == "rs_rome"
+        and args.force_traffic
+        and (args.embb_time or args.urllc_time)
+    ):
+        print(
+            "Error: For RS ROMES, use either --force-traffic or --embb-time/--urllc-time, not both."
+        )
+        sys.exit(1)
+    if (
+        log_format == "rs_rome"
+        and not args.force_traffic
+        and not (args.embb_time or args.urllc_time)
+    ):
+        print(
+            "Error: RS ROMES logs need labels. Provide --force-traffic or --embb-time/--urllc-time."
+        )
         sys.exit(1)
     if log_format == "amarisoft" and (args.embb_time or args.urllc_time):
         print("Error: Amarisoft logs must be labeled with UE IDs, not time ranges.")
         sys.exit(1)
+    if log_format == "amarisoft" and args.force_traffic:
+        print("Error: --force-traffic is only supported for RS ROMES logs.")
+        sys.exit(1)
     if log_format == "normalized" and (
-        args.embb_ue or args.urllc_ue or args.embb_time or args.urllc_time
+        args.embb_ue
+        or args.urllc_ue
+        or args.embb_time
+        or args.urllc_time
+        or args.force_traffic
     ):
         print("Error: Normalized logs should already include traffic_type labels.")
         sys.exit(1)
@@ -105,13 +148,14 @@ def main() -> None:
             print(f"Warning: Log file not found at '{logfile}'. Skipping.")
             continue
 
-        normalized_df = normalize_log_file(
+        normalized_df: pd.DataFrame = normalize_log_file(
             logfile,
             log_format=log_format,
             embb_ues=set(args.embb_ue) if args.embb_ue else None,
             urllc_ues=set(args.urllc_ue) if args.urllc_ue else None,
             embb_time_ranges=args.embb_time,
             urllc_time_ranges=args.urllc_time,
+            forced_traffic_type=args.force_traffic,
         )
         if normalized_df.empty:
             print(f"Warning: No parsable data found in '{logfile}'. Skipping.")

@@ -63,11 +63,13 @@ If you have logs from multiple sources, normalize them once and use the normaliz
 ```powershell
 python transform_log.py data/amarisoft_uesim/20250829-133752_urllc_ping_long.log --format amarisoft --embb-ue 9 --urllc-ue 1
 python transform_log.py data/rs_romes/40MHz.csv --format rome --urllc-time 11:52:59.000-11:53:10.000 --embb-time 11:53:20.000-11:54:00.000 --output-dir data/normalized
+python transform_log.py data/rs_romes/40MHz.csv --format rome --force-traffic urllc --output-dir data/normalized
 ```
 
 Notes:
 - `--format` is required. Aliases: `rome` → `rs_rome`, `norm` → `normalized`.
 - RS ROME logs are labeled using inclusive time ranges on the `Time` column.
+- RS ROME logs can also be forced to one class with `--force-traffic embb|urllc`.
 - Amarisoft logs are labeled using UE IDs.
 - Normalized inputs should already contain `traffic_type` (no labeling arguments allowed).
 

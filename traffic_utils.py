@@ -217,7 +217,7 @@ def _parse_amarisoft_log_file(file_path: str) -> pd.DataFrame:
     date_from_name = _extract_date_from_filename(file_path)
     if date_from_name is not None:
         df["timestamp"] = pd.to_datetime(
-            df["timestamp"].apply(lambda t: f"{date_from_name} {t}"),
+            df["timestamp"].apply(lambda t: f"{date_from_name} {t}"),  # type: ignore
             format="%Y-%m-%d %H:%M:%S.%f",
             errors="coerce",
         )
@@ -250,17 +250,28 @@ def _modulation_to_order(value: str) -> Optional[int]:
 
 
 def _parse_rs_rome_csv(file_path: str) -> pd.DataFrame:
-    df_raw = pd.read_csv(
-        file_path,
-        sep=";",
-        dtype=str,
-        keep_default_na=False,
-        na_values=["", "NA", "N/A"],
-        engine="python",
-        on_bad_lines="skip",
-        quoting=csv.QUOTE_NONE,
-        escapechar="\\",
-    )
+    with open(file_path, "r", encoding="utf-8", errors="replace", newline="") as f:
+        reader = csv.reader(f, delimiter=";")
+        try:
+            header = next(reader)
+        except StopIteration:
+            return pd.DataFrame()
+
+        header = [h.strip().lstrip("\ufeff") for h in header]
+        expected_cols = len(header)
+        rows: list[list[str]] = []
+
+        for row in reader:
+            if not row:
+                continue
+            if len(row) < expected_cols:
+                row = row + [""] * (expected_cols - len(row))
+            elif len(row) > expected_cols:
+                # RS ROME exports may have unquoted ';' in trailing Info fields.
+                row = row[: expected_cols - 1] + [";".join(row[expected_cols - 1 :])]
+            rows.append(row)
+
+    df_raw = pd.DataFrame(rows, columns=header, dtype=str)
     if df_raw.empty:
         return pd.DataFrame()
 
@@ -301,6 +312,11 @@ def _parse_rs_rome_csv(file_path: str) -> pd.DataFrame:
     df_raw["timestamp"] = pd.to_datetime(
         df_raw["Time"], format="%H:%M:%S.%f", errors="coerce"
     )
+    missing_ms_mask = df_raw["timestamp"].isna()
+    if missing_ms_mask.any():
+        df_raw.loc[missing_ms_mask, "timestamp"] = pd.to_datetime(
+            df_raw.loc[missing_ms_mask, "Time"], format="%H:%M:%S", errors="coerce"
+        )
 
     df_raw["harq"] = pd.to_numeric(df_raw.get("HARQ"), errors="coerce")
     df_raw["mcs"] = pd.to_numeric(df_raw.get("MCS"), errors="coerce")
@@ -392,6 +408,7 @@ def normalize_log_file(
     urllc_ues: Optional[set[int]] = None,
     embb_time_ranges: Optional[list[str]] = None,
     urllc_time_ranges: Optional[list[str]] = None,
+    forced_traffic_type: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Normalize a log file (Amarisoft, RS ROME CSV, or normalized CSV) into a common schema.
@@ -412,7 +429,11 @@ def normalize_log_file(
     else:
         raise ValueError(f"Unknown log format '{log_format}'.")
 
-    if "traffic_type" not in df.columns or df["traffic_type"].isna().all():
+    if forced_traffic_type:
+        df["traffic_type"] = (
+            "URLLC" if forced_traffic_type.lower() == "urllc" else "eMBB"
+        )
+    elif "traffic_type" not in df.columns or df["traffic_type"].isna().all():
         if embb_time_ranges or urllc_time_ranges:
             embb_ranges = _parse_time_ranges(embb_time_ranges or [])
             urllc_ranges = _parse_time_ranges(urllc_time_ranges or [])

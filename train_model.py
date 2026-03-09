@@ -91,9 +91,6 @@ def main():
         f"Filtered out {initial_packet_count - len(master_raw_df)} unlabeled packets."
     )
 
-    print(
-        "\n--- Normalization complete (system information packets with harq=-1 already filtered). ---"
-    )
     print(f"Remaining packets for training: {len(master_raw_df)}")
 
     if master_raw_df.empty:
@@ -169,7 +166,7 @@ def main():
     print(f"\nTraining on {len(X_train)} packets, testing on {len(X_test)} packets.")  # type: ignore
 
     print("\n--- Training LightGBM Model ---")
-    lgbm = lgb.LGBMClassifier(objective="binary", random_state=42, learning_rate=0.01)
+    lgbm = lgb.LGBMClassifier(objective="binary", random_state=42, learning_rate=0.01, num_leaves=51, n_estimators=1000)  # type: ignore
 
     # Pass the previous model (if available) so LightGBM can warm start training.
     lgbm.fit(X_train, y_train, init_model=initial_model)  # type: ignore

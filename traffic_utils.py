@@ -1,7 +1,7 @@
 import csv
 import os
 import re
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Optional
 import pandas as pd
 import numpy as np
@@ -21,7 +21,6 @@ STANDARD_COLUMNS = [
     "cr",
     "retx",
     "crc_ok",
-    "snr",
     "mcs",
     "format",
     "total_len",
@@ -36,7 +35,6 @@ NUMERIC_COLUMNS = [
     "cr",
     "retx",
     "crc_ok",
-    "snr",
     "mcs",
     "format",
     "total_len",
@@ -47,12 +45,12 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
     """
     Parses a single PHY or MAC log line and extracts relevant features.
     This version is compatible with both gNB and UE log formats by handling
-    optional fields (crc, snr) and field name variations (mcs/mcs1).
+    optional fields (crc and field name variations (mcs/mcs1).
     """
     # --- PUSCH (Uplink Data) ---
     pusch_match = re.search(
         r"\[PHY\].*?UL.*?PUSCH:?\s+.*?harq=([\w\d]+).*?prb=([-\d:;,]+).*?tb_len=(\d+).*?mod=(\d+).*?rv_idx=(\d+).*?cr=([\d\.]+).*?retx=(\d+)"
-        r"(?:.*?crc=(\w+))?(?:.*?snr=([\d\.-]+))?",
+        r"(?:.*?crc=(\w+))?",
         line,
     )
     if pusch_match:
@@ -68,7 +66,6 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
             )
 
         crc_val = pusch_match.group(8)
-        snr_val = pusch_match.group(9)
 
         return {
             "type": "PUSCH",
@@ -81,13 +78,12 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
             "cr": float(pusch_match.group(6)),
             "retx": int(pusch_match.group(7)),
             "crc_ok": 1 if crc_val == "OK" else 0 if crc_val else 1,
-            "snr": float(snr_val) if snr_val else np.nan,
         }
 
     # --- PDSCH (Downlink Data) ---
     pdsch_match = re.search(
         r"\[PHY\].*?DL.*?PDSCH:?\s+.*?harq=([\w\d]+).*?prb=([-\d:;,]+).*?tb_len=(\d+).*?mod=(\d+).*?rv_idx=(\d+).*?cr=([\d\.]+).*?retx=(\d+)"
-        r"(?:.*?crc=(\w+))?(?:.*?snr=([\d\.-]+))?",
+        r"(?:.*?crc=(\w+))?",
         line,
     )
     if pdsch_match:
@@ -103,7 +99,6 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
             )
 
         crc_val = pdsch_match.group(8)
-        snr_val = pdsch_match.group(9)
 
         return {
             "type": "PDSCH",
@@ -116,7 +111,6 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
             "cr": float(pdsch_match.group(6)),
             "retx": int(pdsch_match.group(7)),
             "crc_ok": 1 if crc_val == "OK" else 0 if crc_val else 1,
-            "snr": float(snr_val) if snr_val else np.nan,
         }
 
     # --- PDCCH (Downlink Control) ---
@@ -129,16 +123,12 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
         }
 
     # --- PUCCH (Uplink Control) ---
-    pucch_match = re.search(
-        r"\[PHY\].*?UL.*?PUCCH:?\s+.*?format=(\d+)(?:.*?snr=([\d\.-]+))?", line
-    )
+    pucch_match = re.search(r"\[PHY\].*?UL.*?PUCCH:?\s+.*?format=(\d+)", line)
     if pucch_match:
-        snr_val = pucch_match.group(2)
         return {
             "type": "PUCCH",
             "direction": "UL",
             "format": int(pucch_match.group(1)),
-            "snr": float(snr_val) if snr_val else np.nan,
         }
 
     # --- MAC UL ---
@@ -318,26 +308,25 @@ def _parse_rs_rome_csv(file_path: str) -> pd.DataFrame:
             df_raw.loc[missing_ms_mask, "Time"], format="%H:%M:%S", errors="coerce"
         )
 
-    df_raw["harq"] = pd.to_numeric(df_raw.get("HARQ"), errors="coerce")
-    df_raw["mcs"] = pd.to_numeric(df_raw.get("MCS"), errors="coerce")
-    df_raw["mod"] = df_raw.get("Mod", "").map(_modulation_to_order)
-    df_raw["tb_len"] = pd.to_numeric(df_raw.get("TBS"), errors="coerce")
-    df_raw["prbs"] = pd.to_numeric(df_raw.get("RB"), errors="coerce")
-    df_raw["rv_idx"] = pd.to_numeric(df_raw.get("RV"), errors="coerce")
+    df_raw["harq"] = pd.to_numeric(df_raw.get("HARQ", np.nan), errors="coerce")
+    df_raw["mcs"] = pd.to_numeric(df_raw.get("MCS", np.nan), errors="coerce")
+    df_raw["mod"] = pd.Series(df_raw.get("Mod", "")).map(_modulation_to_order)
+    df_raw["tb_len"] = pd.to_numeric(df_raw.get("TBS", np.nan), errors="coerce")
+    df_raw["prbs"] = pd.to_numeric(df_raw.get("RB", np.nan), errors="coerce")
+    df_raw["rv_idx"] = pd.to_numeric(df_raw.get("RV", np.nan), errors="coerce")
 
-    retx_raw = df_raw.get("ReTx", "")
+    retx_raw = pd.Series(df_raw.get("ReTx", ""))
     retx_numeric = pd.to_numeric(retx_raw, errors="coerce")
     df_raw["retx"] = retx_numeric.fillna(
         retx_raw.astype(str).str.upper().eq("NEW").astype(int)
     )
 
-    crc_raw = df_raw.get("CRC", "").astype(str).str.upper()
+    crc_raw = pd.Series(df_raw.get("CRC", "")).astype(str).str.upper()
     df_raw["crc_ok"] = crc_raw.map({"OK": 1, "PASS": 1, "KO": 0, "FAIL": 0})
 
-    df_raw["snr"] = pd.to_numeric(df_raw.get("RSRP/TxP"), errors="coerce")
-    df_raw["format"] = pd.to_numeric(df_raw.get("Format"), errors="coerce")
+    df_raw["format"] = pd.to_numeric(df_raw.get("Format", np.nan), errors="coerce")
 
-    df_raw["total_len"] = pd.to_numeric(df_raw.get("TBS"), errors="coerce")
+    df_raw["total_len"] = pd.to_numeric(df_raw.get("TBS", np.nan), errors="coerce")
     df_raw["source_format"] = "rs_rome"
 
     df_raw = df_raw.dropna(subset=["timestamp", "type", "direction"])
@@ -360,8 +349,8 @@ def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def _parse_time_ranges(
     range_specs: list[str],
-) -> list[tuple[datetime.time, datetime.time]]:
-    ranges: list[tuple[datetime.time, datetime.time]] = []
+) -> list[tuple[time, time]]:
+    ranges: list[tuple[time, time]] = []
     for spec in range_specs:
         if "-" not in spec:
             raise ValueError(
@@ -376,15 +365,13 @@ def _parse_time_ranges(
 
 def _label_by_time_ranges(
     df: pd.DataFrame,
-    embb_ranges: list[tuple[datetime.time, datetime.time]],
-    urllc_ranges: list[tuple[datetime.time, datetime.time]],
+    embb_ranges: list[tuple[time, time]],
+    urllc_ranges: list[tuple[time, time]],
 ) -> pd.DataFrame:
     if df.empty:
         return df
 
-    def in_ranges(
-        ts: pd.Timestamp, ranges: list[tuple[datetime.time, datetime.time]]
-    ) -> bool:
+    def in_ranges(ts: pd.Timestamp, ranges: list[tuple[time, time]]) -> bool:
         t = ts.time()
         for start, end in ranges:
             if start <= t <= end:
@@ -393,10 +380,10 @@ def _label_by_time_ranges(
 
     df["traffic_type"] = pd.NA
     if urllc_ranges:
-        urllc_mask = df["timestamp"].apply(lambda ts: in_ranges(ts, urllc_ranges))
+        urllc_mask = df["timestamp"].apply(lambda ts: in_ranges(ts, urllc_ranges))  # type: ignore[arg-type]
         df.loc[urllc_mask, "traffic_type"] = "URLLC"
     if embb_ranges:
-        embb_mask = df["timestamp"].apply(lambda ts: in_ranges(ts, embb_ranges))
+        embb_mask = df["timestamp"].apply(lambda ts: in_ranges(ts, embb_ranges))  # type: ignore[arg-type]
         df.loc[embb_mask, "traffic_type"] = "eMBB"
     return df
 

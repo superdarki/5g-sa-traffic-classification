@@ -55,9 +55,6 @@ def main():
         f"Filtered out {initial_packet_count - len(master_raw_df)} unlabeled packets."
     )
 
-    print(
-        "\n--- Normalization complete (system information packets with harq=-1 already filtered). ---"
-    )
     print(f"Remaining packets for plotting: {len(master_raw_df)}")
 
     if master_raw_df.empty:

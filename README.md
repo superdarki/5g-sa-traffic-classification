@@ -79,7 +79,7 @@ The normalized format is a CSV with the columns in `traffic_utils.STANDARD_COLUM
 `traffic_utils.engineer_contextual_packet_features` builds:
 - One-hot encoded indicators for packet `type` (PUSCH, PDSCH, PDCCH, PUCCH, MAC) and `direction`.
 - Inter-packet timing features (`inter_packet_time_ns`, `time_to_next_packet_ns`).
-- Rolling mean and standard deviation metrics for numeric columns such as transport block size, PRB counts, modulation order, code rate, retransmissions, SNR, and MAC payload sizes.
+- Rolling mean and standard deviation metrics for numeric columns such as transport block size, PRB counts, modulation order, code rate, retransmissions, and MAC payload sizes.
 - Forward/backward filling to remove gaps before dropping the timestamp column.
 
 Run the helper to inspect the most informative inputs:

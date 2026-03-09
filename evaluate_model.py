@@ -99,9 +99,6 @@ def main():
     print(f"Kept {len(eval_df_raw)} labeled packets for evaluation.")
     print(f"Filtered out {initial_packet_count - len(eval_df_raw)} unlabeled packets.")
 
-    print(
-        "Normalization complete (system information packets with harq=-1 already filtered)."
-    )
     eval_df_filtered = eval_df_raw.reset_index(drop=True)
     print(f"Remaining packets for evaluation: {len(eval_df_filtered)}")
 
@@ -146,7 +143,7 @@ def main():
     y_pred_labels = le.inverse_transform(y_pred_encoded)
 
     results_df = eval_df_filtered[
-        ["timestamp", "type", "direction", "tb_len", "prbs", "snr"]
+        ["timestamp", "type", "direction", "tb_len", "prbs"]
     ].copy()
     results_df["true_type"] = true_labels.values
     results_df["predicted_type"] = y_pred_labels

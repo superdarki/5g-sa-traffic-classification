@@ -161,12 +161,12 @@ def main():
         x = x.reindex(columns=model_columns, fill_value=0)
 
     X_train, X_test, y_train, y_test = train_test_split(  # type: ignore
-        x, y, test_size=0.3, random_state=42, stratify=y
+        x, y, test_size=0.3, stratify=y
     )
     print(f"\nTraining on {len(X_train)} packets, testing on {len(X_test)} packets.")  # type: ignore
 
     print("\n--- Training LightGBM Model ---")
-    lgbm = lgb.LGBMClassifier(objective="binary", random_state=42, learning_rate=0.01, num_leaves=51, n_estimators=1000)  # type: ignore
+    lgbm = lgb.LGBMClassifier(objective="binary", learning_rate=0.01, num_leaves=51, n_estimators=1000, is_unbalance=True)  # type: ignore
 
     # Pass the previous model (if available) so LightGBM can warm start training.
     lgbm.fit(X_train, y_train, init_model=initial_model)  # type: ignore

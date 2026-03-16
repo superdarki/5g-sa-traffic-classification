@@ -8,4 +8,5 @@
 !*.py
 
 !data/**
+!data_raw/**
 !ue_sim/**

@@ -13,7 +13,7 @@ STANDARD_COLUMNS = [
     "traffic_type",
     "type",
     "direction",
-    "harq",
+    # "harq",
     "prbs",
     "tb_len",
     "mod",
@@ -27,7 +27,7 @@ STANDARD_COLUMNS = [
 ]
 
 NUMERIC_COLUMNS = [
-    "harq",
+    # "harq",
     "prbs",
     "tb_len",
     "mod",
@@ -54,8 +54,8 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
         line,
     )
     if pusch_match:
-        harq_val = pusch_match.group(1)
-        harq_id = -1 if harq_val == "si" else int(harq_val)
+        # harq_val = pusch_match.group(1)
+        # harq_id = -1 if harq_val == "si" else int(harq_val)
 
         prbs = 0
         prb_groups = pusch_match.group(2).split(",")
@@ -70,7 +70,7 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
         return {
             "type": "PUSCH",
             "direction": "UL",
-            "harq": harq_id,
+            # "harq": harq_id,
             "prbs": prbs,
             "tb_len": int(pusch_match.group(3)),
             "mod": int(pusch_match.group(4)),
@@ -87,8 +87,8 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
         line,
     )
     if pdsch_match:
-        harq_val = pdsch_match.group(1)
-        harq_id = -1 if harq_val == "si" else int(harq_val)
+        # harq_val = pdsch_match.group(1)
+        # harq_id = -1 if harq_val == "si" else int(harq_val)
 
         prbs = 0
         prb_groups = pdsch_match.group(2).split(",")
@@ -103,7 +103,7 @@ def parse_phy_mac_log_line(line: str) -> Optional[dict[str, int | float | str]]:
         return {
             "type": "PDSCH",
             "direction": "DL",
-            "harq": harq_id,
+            # "harq": harq_id,
             "prbs": prbs,
             "tb_len": int(pdsch_match.group(3)),
             "mod": int(pdsch_match.group(4)),
@@ -308,7 +308,7 @@ def _parse_rs_rome_csv(file_path: str) -> pd.DataFrame:
             df_raw.loc[missing_ms_mask, "Time"], format="%H:%M:%S", errors="coerce"
         )
 
-    df_raw["harq"] = pd.to_numeric(df_raw.get("HARQ", np.nan), errors="coerce")
+    # df_raw["harq"] = pd.to_numeric(df_raw.get("HARQ", np.nan), errors="coerce")
     df_raw["mcs"] = pd.to_numeric(df_raw.get("MCS", np.nan), errors="coerce")
     df_raw["mod"] = pd.Series(df_raw.get("Mod", "")).map(_modulation_to_order)
     df_raw["tb_len"] = pd.to_numeric(df_raw.get("TBS", np.nan), errors="coerce")
@@ -436,8 +436,8 @@ def normalize_log_file(
     df = _ensure_standard_columns(df)
     df = _coerce_numeric_columns(df)
 
-    if "harq" in df.columns:
-        df = df[(df["harq"].isna()) | (df["harq"] != -1)].reset_index(drop=True)
+    # if "harq" in df.columns:
+    #     df = df[(df["harq"].isna()) | (df["harq"] != -1)].reset_index(drop=True)
 
     df = df.dropna(subset=["timestamp", "type", "direction"])
     return df.reset_index(drop=True)
